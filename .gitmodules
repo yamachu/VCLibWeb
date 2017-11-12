@@ -1,0 +1,9 @@
+[submodule "wasm/VCLib"]
+	path = wasm/VCLib
+	url = git@github.com:yamachu/VCLib.git
+[submodule "wasm/World"]
+	path = wasm/World
+	url = git@github.com:yamachu/World.git
+[submodule "wasm/SPTK"]
+	path = wasm/SPTK
+	url = git@github.com:yamachu/SPTK.git
