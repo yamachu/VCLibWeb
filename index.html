@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>WorldForWeb</title>
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+</head>
+
+<body>
+  <input type="file" name="file" id="file">
+  <div id="container" style="height: 400px;">
+  </div>
+
+  <script src="dist/bundle.js"></script>
+  <script>
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+    window.playAudio = {};
+    window.playAudio.context = new AudioContext();
+    window.playAudio.context.sampleRate = 16000;
+    // 今度再生に対応
+    window.playAudio.stream = window.playAudio.context.createMediaStreamDestination();
+    VCLibWeb.VCLibWeb.Initialize()
+      .then(() => {
+        console.log('Initialized');
+        // Show Modal
+      })
+      .catch(err => {
+        console.error(err);
+      });
+    let current_buffer;
+    let current_graph;
+    var worldParameters;
+    let displayF0 = () => {
+      Highcharts.chart('container', {
+        chart: {
+          zoomType: 'x'
+        },
+        title: {
+          text: 'F0'
+        },
+        legend: {
+          enabled: false,
+        },
+        series: [{
+          name: 'F0',
+          data: worldParameters.f0,
+          type: 'spline'
+        }]
+      });
+    }
+    let decodeAudioBuffer = (buffer) => {
+      let context = window.playAudio.context;
+      return context.decodeAudioData(buffer)
+        .then((decodedBuffer) => {
+          current_buffer = decodedBuffer;
+        });
+    }
+    let file = document.getElementById('file');
+    if (window.File && window.FileReader && window.FileList) {
+      function loadWavFile(e) {
+        let waveFile = e.target.files[0];
+        console.dir(waveFile);
+        let reader = new FileReader();
+        reader.onload = () => {
+          decodeAudioBuffer(reader.result)
+            .then(() => {
+              // Change UI button
+              console.log('Finish decode buffer');
+            })
+            .then(() => {
+              worldParameters = VCLibWeb.VCLibWeb.GetSpeechFeatures(new Float64Array(current_buffer.getChannelData(0)), current_buffer.sampleRate);
+            })
+            .then(() => {
+              console.log('Finish Analyze');
+              console.dir(worldParameters);
+            })
+            .then(() => {
+              let mcepOptions = VCLibWeb.VCLibWeb.GetDefaultOptionsForMgcep();
+              mcepOptions.eps = 1e-10;
+              mcepOptions.alpha = 0.42;
+              mcepOptions.gamma = 0;
+              mcepOptions.order = 24;
+              mcepOptions.fft_length = 1024;
+              mcepOptions.min_det = 0.0;
+              mcepOptions.itype = 4;
+              mcepOptions.max_iter = 0;
+              mcepOptions.etype = 1;
+
+              let userMcep = VCLibWeb.VCLibWeb.mgcep(worldParameters.sp, mcepOptions);
+
+              console.dir(userMcep);
+
+              let mlsadfOptions = VCLibWeb.VCLibWeb.GetDefaultOptionsForMlsadf();
+              mlsadfOptions.order = 24;
+              mlsadfOptions.alpha = 0.42;
+              mlsadfOptions.frame_period = 80;
+              mlsadfOptions.pade = 5;
+              mlsadfOptions.is_inverse = true;
+
+              let y_inverse = VCLibWeb.VCLibWeb.mlsadf(VCLibWeb.VCLibWeb.UnnormalizeWebAudioBuffer(current_buffer.getChannelData(0)), userMcep, mlsadfOptions);
+
+              console.dir(y_inverse);
+
+              mlsadfOptions.is_inverse = false;
+              let y = VCLibWeb.VCLibWeb.mlsadf(y_inverse, userMcep, mlsadfOptions);
+
+              console.dir(y);
+            })
+        }
+        reader.readAsArrayBuffer(waveFile);
+      }
+      file.addEventListener('change', loadWavFile, false);
+    } else {
+      file.style.display = 'none';
+      result.innerHTML = 'File APIを使用することが出来ません，対応ブラウザでご確認ください．';
+    }
+  </script>
+</body>
+
+</html>
